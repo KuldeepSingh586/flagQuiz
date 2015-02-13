@@ -16,11 +16,11 @@ import android.app.DialogFragment;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.DialogInterface;
-
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.AssetManager;
 import android.graphics.drawable.Drawable;
-
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
@@ -30,6 +30,7 @@ import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
+import android.webkit.WebView.FindListener;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -59,13 +60,15 @@ public class QuizFragment extends Fragment
    private LinearLayout[] guessLinearLayouts; // rows of answer Buttons
    private TextView answerTextView; // displays Correct! or Incorrect!
    private Button nextFlagButton;
- 
+   private Button wikipediaButton;
    
-   private int amountCorrectFirst = 0;
-   private int numberOfGuesses = 0;
+  
+   
+   private int correctFirstAmount = 0;
+   private int numberOfGuess = 0;
    private int userScore = 0;
-   private final int scoreAmount = 50;
-   private int[] highscores = new int[6];
+   private final int scoreTotal = 50;
+   private int[] maximumScore = new int[6];
    
    // configures the QuizFragment when its View is created
    @SuppressLint("TrulyRandom") @Override
@@ -92,7 +95,8 @@ public class QuizFragment extends Fragment
       answerTextView = (TextView) view.findViewById(R.id.answerTextView);
       nextFlagButton = (Button) view.findViewById(R.id.nextFlagButton);
       nextFlagButton.setOnClickListener(nextButtonListener);
-      
+      wikipediaButton = (Button) view.findViewById(R.id.wikipediaButton);
+      wikipediaButton.setOnClickListener(wikipediaListener);
      
       
       
@@ -109,24 +113,24 @@ public class QuizFragment extends Fragment
       return view; // returns the fragment's view for display
    } // end method onCreateView
    
-   private void insertHighscores(int currentScore) {
-	   SharedPreferences savedHighscores = this.getActivity().getSharedPreferences("pref", Context.MODE_PRIVATE);
-	   SharedPreferences.Editor preferencesEditor = savedHighscores.edit();
+   private void insertmaximumScore(int currentScore) {
+	   SharedPreferences savedmaximumScore = this.getActivity().getSharedPreferences("pref", Context.MODE_PRIVATE);
+	   SharedPreferences.Editor preferencesEditor = savedmaximumScore.edit();
 	   
 	   for (int i = 0; i < 5; i++) {
-		   highscores[i] = savedHighscores.getInt("highscore" + String.valueOf(i), 0);
+		   maximumScore[i] = savedmaximumScore.getInt("highscore" + String.valueOf(i), 0);
 	   }
 	   
-	   highscores[5] = currentScore;
-	   Arrays.sort(highscores);
+	   maximumScore[5] = currentScore;
+	   Arrays.sort(maximumScore);
 	   
 	   for (int i = 0; i < 5; i++) {
-		   preferencesEditor.putInt("highscore" + String.valueOf(i), highscores[i]);
+		   preferencesEditor.putInt("highscore" + String.valueOf(i), maximumScore[i]);
 	   }
 	   
 	   preferencesEditor.apply(); 
 	   
-	   Toast.makeText(getActivity(), "Highscores have been updated. Method: insertHighscores(int currentScore)", Toast.LENGTH_LONG).show();
+	   Toast.makeText(getActivity(), "maximumScore have been updated. Method: insertmaximumScore(int currentScore)", Toast.LENGTH_LONG).show();
    }
    
    private OnClickListener nextButtonListener = new OnClickListener() {
@@ -136,12 +140,19 @@ public class QuizFragment extends Fragment
   		}
    };
    
-
+   private OnClickListener wikipediaListener = new OnClickListener() {
+		@Override
+   	public void onClick(View v) {
+			String urlString = "http://en.wikipedia.org/wiki/" + getCountryName(correctAnswer);
+			Intent webIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(urlString));
+			startActivity(webIntent);
+		}
+ };
    // update guessRows based on value in SharedPreferences
    public void updateGuessRows(SharedPreferences sharedPreferences) {
       // get the number of guess buttons that should be displayed
       String choices = sharedPreferences.getString(MainActivity.CHOICES, null);
-      guessRows = Integer.parseInt(choices) / 3;
+      guessRows = Integer.parseInt(choices);
 
       // hide all guess button LinearLayouts
       for (LinearLayout layout : guessLinearLayouts) {
@@ -259,8 +270,9 @@ public class QuizFragment extends Fragment
       String countryName = getCountryName(correctAnswer);
       ((Button) randomRow.getChildAt(column)).setText(countryName);
       
-      numberOfGuesses = 0;
+      numberOfGuess = 0;
       nextFlagButton.setEnabled(false);
+      wikipediaButton.setEnabled(false);
      
    } // end method loadNextFlag
 
@@ -273,7 +285,7 @@ public class QuizFragment extends Fragment
    	private OnClickListener guessButtonListener = new OnClickListener() {
    		@Override
       	public void onClick(View v) {
-    	  numberOfGuesses += 1;
+    	  numberOfGuess += 1;
     	  Button guessButton = ((Button) v); 
     	  String guess = guessButton.getText().toString();
     	  String answer = getCountryName(correctAnswer);
@@ -282,11 +294,11 @@ public class QuizFragment extends Fragment
     	  
     	  
     	  if (guess.equals(answer)) { // if the guess is correct
-    		  if (numberOfGuesses == 1) {
-    			  amountCorrectFirst += 1;
+    		  if (numberOfGuess == 1) {
+    			  correctFirstAmount += 1;
     		  }
     		  
-    		  userScore += scoreAmount / numberOfGuesses;
+    		  userScore += scoreTotal / numberOfGuess;
     		  ++correctAnswers; // increment the number of correct answers
 
             // display correct answer in green text
@@ -297,7 +309,7 @@ public class QuizFragment extends Fragment
             
             // if the user has correctly identified FLAGS_IN_QUIZ flags
     		  if (correctAnswers == FLAGS_IN_QUIZ) {
-    			  insertHighscores(userScore);
+    			  insertmaximumScore(userScore);
     			  
                // DialogFragment to display quiz stats and start new quiz
     			  DialogFragment quizResults = new DialogFragment() {
@@ -308,7 +320,7 @@ public class QuizFragment extends Fragment
                     	 builder.setCancelable(false); 
                         
                     	 builder.setMessage(getResources().getString(R.string.results, totalGuesses, (1000 / (double) totalGuesses) ) 
-                    			 + "\n" + getResources().getString(R.string.amount_right_first, amountCorrectFirst)
+                    			 + "\n" + getResources().getString(R.string.amount_right_first, correctFirstAmount)
                     			 + "\n" + getResources().getString(R.string.score_string, userScore));
                         
                         // "Reset Quiz" Button                              
@@ -334,6 +346,7 @@ public class QuizFragment extends Fragment
     				  public void run() {
     					  //loadNextFlag(null);
     					  nextFlagButton.setEnabled(true);
+    					  wikipediaButton.setEnabled(true);
     					 
     				  }
                   	}, 0); // 2000 milliseconds for 2-second delay
